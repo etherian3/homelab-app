@@ -1,0 +1,35 @@
+services:
+
+  app:
+    image: nginx:alpine
+    container_name: homelab-app
+    restart: unless-stopped
+
+    ports:
+      - "8080:80"
+
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: homelab-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: homelab
+      POSTGRES_USER: homelab
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    networks:
+      - app-network
+
+volumes:
+  postgres-data:
+
+networks:
+  app-network:
+    driver: bridge
