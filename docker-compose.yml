@@ -1,15 +1,37 @@
 services:
 
   app:
-    image: nginx:alpine
+    build: .
     container_name: homelab-app
     restart: unless-stopped
 
     ports:
-      - "8080:80"
+      - "8000:8000"
+
+    environment:
+      DATABASE_URL: "postgresql://homelab:Homeserver06@postgres:5432/homelab"
 
     networks:
       - app-network
+      - proxy
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.homelab.rule=Host(`app.homelab`)"
+      - "traefik.http.routers.homelab.entrypoints=web"
+      - "traefik.http.services.homelab.loadbalancer.server.port=8000"
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   postgres:
     image: postgres:16-alpine
@@ -19,7 +41,7 @@ services:
     environment:
       POSTGRES_DB: homelab
       POSTGRES_USER: homelab
-      POSTGRES_PASSWORD: POSTGRES_PASSWORD
+      POSTGRES_PASSWORD: "Homeserver06"
 
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -27,9 +49,14 @@ services:
     networks:
       - app-network
 
+
 volumes:
   postgres-data:
+
 
 networks:
   app-network:
     driver: bridge
+
+  proxy:
+    external: true
