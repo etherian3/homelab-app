@@ -61,7 +61,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=sha
+            type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
@@ -71,3 +71,31 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    name: Deploy Application
+    runs-on: self-hosted
+    needs: build
+
+    steps:
+      - name: Deploy application
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'cd /opt/homelab-app && docker compose pull app && docker compose up -d app'
+
+      - name: Wait for application
+        run: |
+          sleep 10
+
+      - name: Health check
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'test "$(docker inspect --format="{{.State.Health.Status}}" homelab-app)" = "healthy"'
+
+      - name: Deployment status
+        run: |
+          echo "Deployment completed successfully."
