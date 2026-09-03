@@ -40,30 +40,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker image
+      - name: Build Docker Image
         run: |
           docker build -t homelab-app:test .
 
   deploy-test:
-    name: Test SSH Connection
-    runs-on: ubuntu-latest
+    name: Test Deployment Connection
+    runs-on: self-hosted
     needs: docker-build
 
     steps:
-      - name: Configure SSH
+      - name: Test management server
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          echo "Runner hostname:"
+          hostname
 
-      - name: Add server to known_hosts
-        run: |
-          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+          echo "Runner user:"
+          whoami
 
-      - name: Test SSH connection
+      - name: Test application server SSH
         run: |
           ssh \
-            -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=yes \
-            "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}" \
+            -o StrictHostKeyChecking=no \
+            ether@192.168.1.111 \
             "hostname && whoami && docker --version"
