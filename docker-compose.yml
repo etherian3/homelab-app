@@ -1,7 +1,7 @@
 services:
 
   app:
-    build: .
+    image: ghcr.io/etherian3/homelab-app:${APP_IMAGE_TAG:-latest}
     container_name: homelab-app
     restart: unless-stopped
 
