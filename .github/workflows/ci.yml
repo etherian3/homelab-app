@@ -44,23 +44,26 @@ jobs:
         run: |
           docker build -t homelab-app:test .
 
-  deploy-test:
-    name: Test Deployment Connection
+  deploy:
+    name: Deploy Application
     runs-on: self-hosted
     needs: docker-build
 
     steps:
-      - name: Test management server
-        run: |
-          echo "Runner hostname:"
-          hostname
-
-          echo "Runner user:"
-          whoami
-
-      - name: Test application server SSH
+      - name: Deploy to application-01
         run: |
           ssh \
             -o StrictHostKeyChecking=no \
             ether@192.168.1.111 \
-            "hostname && whoami && docker --version"
+            'cd /opt/homelab-app && git pull origin main && docker compose up -d --build'
+
+      - name: Wait for application
+        run: |
+          sleep 10
+
+      - name: Health check
+        run: |
+          ssh \
+            -o StrictHostKeyChecking=no \
+            ether@192.168.1.111 \
+            'docker inspect --format="{{.State.Health.Status}}" homelab-app'
