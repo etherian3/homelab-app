@@ -1,2 +1,4 @@
 .env
 *.log
+docker-compose.yml.backup
+docker-compose.yml.before-ghcr
