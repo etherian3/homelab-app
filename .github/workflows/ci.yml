@@ -78,21 +78,86 @@ jobs:
     needs: build
 
     steps:
-      - name: Deploy application
+      - name: Capture current version
+        id: current
+        run: |
+          CURRENT_IMAGE=$(ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'docker inspect --format="{{.Config.Image}}" homelab-app')
+
+          CURRENT_TAG="${CURRENT_IMAGE##*:}"
+
+          echo "Current image: ${CURRENT_IMAGE}"
+          echo "Current tag: ${CURRENT_TAG}"
+
+          echo "tag=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new version
+        id: deploy
+        continue-on-error: true
         run: |
           ssh \
             -o StrictHostKeyChecking=yes \
             ether@192.168.1.111 \
             "/opt/homelab-app/scripts/deploy.sh sha-${GITHUB_SHA::7}"
 
-      - name: Verify deployment
+      - name: Verify new deployment
+        id: verify
+        if: steps.deploy.outcome == 'success'
         run: |
+          STATUS=$(ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'docker inspect --format="{{.State.Health.Status}}" homelab-app')
+
+          echo "Application health: ${STATUS}"
+
+          if [ "$STATUS" != "healthy" ]; then
+            echo "Deployment verification failed."
+            exit 1
+          fi
+
+      - name: Rollback on deployment failure
+        if: steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure'
+        run: |
+          echo "Deployment failed."
+          echo "Rolling back to: ${{ steps.current.outputs.tag }}"
+
           ssh \
             -o StrictHostKeyChecking=yes \
             ether@192.168.1.111 \
-            'docker inspect --format="{{.State.Health.Status}}" homelab-app'
+            "/opt/homelab-app/scripts/deploy.sh ${{ steps.current.outputs.tag }}"
+
+      - name: Verify rollback
+        if: steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure'
+        run: |
+          STATUS=$(ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'docker inspect --format="{{.State.Health.Status}}" homelab-app')
+
+          IMAGE=$(ssh \
+            -o StrictHostKeyChecking=yes \
+            ether@192.168.1.111 \
+            'docker inspect --format="{{.Config.Image}}" homelab-app')
+
+          echo "Rollback image: ${IMAGE}"
+          echo "Rollback health: ${STATUS}"
+
+          if [ "$STATUS" != "healthy" ]; then
+            echo "CRITICAL: Rollback failed."
+            exit 1
+          fi
+
+      - name: Fail deployment after rollback
+        if: steps.deploy.outcome == 'failure' || steps.verify.outcome == 'failure'
+        run: |
+          echo "Deployment failed, but rollback completed successfully."
+          exit 1
 
       - name: Show deployed image
+        if: steps.deploy.outcome == 'success' && steps.verify.outcome == 'success'
         run: |
           ssh \
             -o StrictHostKeyChecking=yes \
